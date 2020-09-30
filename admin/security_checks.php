@@ -16,22 +16,22 @@
     return strcasecmp($a['title'], $b['title']);
   }
 
-  $types = array('info', 'warning', 'error');
+  $types = ['info', 'warning', 'error'];
 
-  $modules = array();
+  $modules = [];
 
   if ($secdir = @dir(DIR_FS_ADMIN . 'includes/modules/security_check/')) {
     while ($file = $secdir->read()) {
       if (!is_dir(DIR_FS_ADMIN . 'includes/modules/security_check/' . $file)) {
-        if (substr($file, strrpos($file, '.')) == '.php') {
-          $class = 'securityCheck_' . substr($file, 0, strrpos($file, '.'));
+        if ('php' === pathinfo($file, PATHINFO_EXTENSION)) {
+          $class = 'securityCheck_' . pathinfo($file, PATHINFO_FILENAME);
 
           include(DIR_FS_ADMIN . 'includes/modules/security_check/' . $file);
           $$class = new $class();
 
-          $modules[] = array('title' => isset($$class->title) ? $$class->title : substr($file, 0, strrpos($file, '.')),
-                             'class' => $class,
-                             'code' => substr($file, 0, strrpos($file, '.')));
+          $modules[] = ['title' => isset($$class->title) ? $$class->title : substr($file, 0, strrpos($file, '.')),
+                        'class' => $class,
+                        'code' => substr($file, 0, strrpos($file, '.'))];
         }
       }
     }
@@ -41,15 +41,15 @@
   if ($extdir = @dir(DIR_FS_ADMIN . 'includes/modules/security_check/extended/')) {
     while ($file = $extdir->read()) {
       if (!is_dir(DIR_FS_ADMIN . 'includes/modules/security_check/extended/' . $file)) {
-        if (substr($file, strrpos($file, '.')) == '.php') {
+        if ('php' === pathinfo($file, PATHINFO_EXTENSION)) {
           $class = 'securityCheckExtended_' . substr($file, 0, strrpos($file, '.'));
 
           include(DIR_FS_ADMIN . 'includes/modules/security_check/extended/' . $file);
           $$class = new $class();
 
-          $modules[] = array('title' => isset($$class->title) ? $$class->title : substr($file, 0, strrpos($file, '.')),
-                             'class' => $class,
-                             'code' => substr($file, 0, strrpos($file, '.')));
+          $modules[] = ['title' => isset($$class->title) ? $$class->title : substr($file, 0, strrpos($file, '.')),
+                        'class' => $class,
+                        'code' => substr($file, 0, strrpos($file, '.'))];
         }
       }
     }
@@ -58,7 +58,7 @@
 
   usort($modules, 'tep_sort_secmodules');
 
-  require('includes/template_top.php');
+  require 'includes/template_top.php';
 ?>
   
   <div class="row">
@@ -66,7 +66,7 @@
       <h1 class="display-4 mb-2"><?php echo HEADING_TITLE; ?></h1>
     </div>
     <div class="col-sm-4 text-right align-self-center">
-      <?php echo tep_draw_bootstrap_button(BUTTON_TEXT_RELOAD, 'fas fa-cog', tep_href_link('security_checks.php'), null, null, 'btn-info xxx text-white'); ?>
+      <?php echo tep_draw_bootstrap_button(BUTTON_TEXT_RELOAD, 'fas fa-cog', tep_href_link('security_checks.php'), null, null, 'btn-info'); ?>
     </div>
   </div>
   

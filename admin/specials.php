@@ -17,14 +17,16 @@
 
   $action = $_GET['action'] ?? '';
   
-  $OSCOM_Hooks->call('specials', 'specialsPreAction');
+  $OSCOM_Hooks->call('specials', 'preAction');
 
   if (tep_not_null($action)) {
     switch ($action) {
       case 'setflag':
-        tep_set_specials_status($_GET['id'], $_GET['flag']);
+        tep_db_query("UPDATE specials SET status = '" . $_GET['flag'] . "', expires_date = NULL, date_status_change = NULL WHERE specials_id = " . (int)$_GET['id']);
+        
+        $OSCOM_Hooks->call('specials', 'setFlagAction');
 
-        tep_redirect(tep_href_link('specials.php', (isset($_GET['page']) ? 'page=' . $_GET['page'] . '&' : '') . 'sID=' . $_GET['id']));
+        tep_redirect(tep_href_link('specials.php', (isset($_GET['page']) ? 'page=' . (int)$_GET['page'] . '&' : '') . 'sID=' . $_GET['id']));
         break;
       case 'insert':
         $products_id = tep_db_prepare_input($_POST['products_id']);
@@ -47,9 +49,9 @@
 
         tep_db_query("insert into specials (products_id, specials_new_products_price, specials_date_added, expires_date, status) values ('" . (int)$products_id . "', '" . tep_db_input($specials_price) . "', now(), " . (tep_not_null($expires_date) ? "'" . tep_db_input($expires_date) . "'" : 'null') . ", '1')");
         
-        $OSCOM_Hooks->call('specials', 'specialsActionInsert');
+        $OSCOM_Hooks->call('specials', 'insertAction');
 
-        tep_redirect(tep_href_link('specials.php', 'page=' . $_GET['page']));
+        tep_redirect(tep_href_link('specials.php', 'page=' . (int)$_GET['page']));
         break;
       case 'update':
         $specials_id = tep_db_prepare_input($_POST['specials_id']);
@@ -66,28 +68,42 @@
 
         tep_db_query("update specials set specials_new_products_price = '" . tep_db_input($specials_price) . "', specials_last_modified = now(), expires_date = " . (tep_not_null($expires_date) ? "'" . tep_db_input($expires_date) . "'" : 'null') . " where specials_id = '" . (int)$specials_id . "'");
         
-        $OSCOM_Hooks->call('specials', 'specialsActionUpdate');
+        $OSCOM_Hooks->call('specials', 'updateAction');
 
-        tep_redirect(tep_href_link('specials.php', 'page=' . $_GET['page'] . '&sID=' . $specials_id));
+        tep_redirect(tep_href_link('specials.php', 'page=' . (int)$_GET['page'] . '&sID=' . $specials_id));
         break;
       case 'deleteconfirm':
         $specials_id = tep_db_prepare_input($_GET['sID']);
 
         tep_db_query("delete from specials where specials_id = '" . (int)$specials_id . "'");
         
-        $OSCOM_Hooks->call('specials', 'specialsActionDelete');
+        $OSCOM_Hooks->call('specials', 'deleteConfirmAction');
 
-        tep_redirect(tep_href_link('specials.php', 'page=' . $_GET['page']));
+        tep_redirect(tep_href_link('specials.php', 'page=' . (int)$_GET['page']));
         break;
     }
   }
   
-  $OSCOM_Hooks->call('specials', 'specialsPostAction');
+  $OSCOM_Hooks->call('specials', 'postAction');
 
   require('includes/template_top.php');
 ?>
 
-  <h1 class="display-4 mb-2"><?php echo HEADING_TITLE; ?></h1>
+  <div class="row">
+    <div class="col">
+      <h1 class="display-4 mb-2"><?php echo HEADING_TITLE; ?></h1>
+    </div>
+    <div class="col text-right align-self-center">
+      <?php
+      if (empty($action)) {
+        echo tep_draw_bootstrap_button(BUTTON_INSERT_SPECIAL, 'fas fa-funnel-dollar', tep_href_link('specials.php', 'action=new'), null, null, 'btn-danger');
+      }
+      else {
+        echo tep_draw_bootstrap_button(IMAGE_CANCEL, 'fas fa-angle-left', tep_href_link('specials.php'), null, null, 'btn-light mt-2');
+      }
+      ?>
+    </div>
+  </div>
 
 <?php
   if ( ($action == 'new') || ($action == 'edit') ) {
@@ -100,11 +116,11 @@
 
       $sInfo = new objectInfo($product);
     } else {
-      $sInfo = new objectInfo(array());
+      $sInfo = new objectInfo([]);
 
 // create an array of products on special, which will be excluded from the pull down menu of products
 // (when creating a new product on special)
-      $specials_array = array();
+      $specials_array = [];
       $specials_query = tep_db_query("select p.products_id from products p, specials s where s.products_id = p.products_id");
       while ($specials = tep_db_fetch_array($specials_query)) {
         $specials_array[] = $specials['products_id'];
@@ -112,14 +128,14 @@
     }
 ?>
 
-  <form name="new_special" <?php echo 'action="' . tep_href_link('specials.php', tep_get_all_get_params(array('action', 'info', 'sID')) . 'action=' . $form_action) . '"'; ?> method="post">
+  <form name="new_special" <?php echo 'action="' . tep_href_link('specials.php', tep_get_all_get_params(['action', 'info', 'sID']) . 'action=' . $form_action) . '"'; ?> method="post">
   <?php 
   if ($form_action == 'update') echo tep_draw_hidden_field('specials_id', $_GET['sID']); 
   ?>
   
     <div class="form-group row">
       <label for="specialProduct" class="col-form-label col-sm-3 text-left text-sm-right"><?php echo TEXT_SPECIALS_PRODUCT; ?></label>
-      <div class="col-sm-9"><?php if (isset($sInfo->products_name)) { echo tep_draw_input_field('n', $sInfo->products_name . ' (' . $currencies->format($sInfo->products_price) . ')', 'readonly class="form-control-plaintext"'); } else { echo tep_draw_products_pull_down('products_id', 'id="specialProduct" class="form-control" required aria-required="true"', $specials_array); } echo tep_draw_hidden_field('products_price', (isset($sInfo->products_price) ? $sInfo->products_price : '')); ?>     
+      <div class="col-sm-9"><?php if (isset($sInfo->products_name)) { echo tep_draw_input_field('n', $sInfo->products_name . ' (' . $currencies->format($sInfo->products_price) . ')', 'readonly class="form-control-plaintext"'); } else { echo tep_draw_products_pull_down('products_id', 'id="specialProduct" required aria-required="true"', $specials_array); } echo tep_draw_hidden_field('products_price', (isset($sInfo->products_price) ? $sInfo->products_price : '')); ?>     
       </div>
     </div>
     
@@ -136,7 +152,7 @@
       <label for="expdate" class="col-form-label col-sm-3 text-left text-sm-right"><?php echo TEXT_SPECIALS_EXPIRES_DATE; ?></label>
       <div class="col-sm-9">
         <?php 
-        echo tep_draw_input_field('expdate', (tep_not_null($sInfo->expires_date) ? substr($sInfo->expires_date, 0, 4) . '-' . substr($sInfo->expires_date, 5, 2) . '-' . substr($sInfo->expires_date, 8, 2) : ''), 'class="form-control" id="expdate"'); 
+        echo tep_draw_input_field('expdate', (isset($sInfo->expires_date) ? substr($sInfo->expires_date, 0, 4) . '-' . substr($sInfo->expires_date, 5, 2) . '-' . substr($sInfo->expires_date, 8, 2) : ''), 'class="form-control" id="expdate"'); 
         ?>    
       </div>
     </div>
@@ -145,9 +161,10 @@
       <?php echo TEXT_SPECIALS_PRICE_TIP; ?>
     </div>
     
-    <?php 
+    <?php
+    echo $OSCOM_Hooks->call('specials', 'formNew');
+    
     echo tep_draw_bootstrap_button(IMAGE_SAVE, 'fas fa-save', null, 'primary', null, 'btn-success btn-block btn-lg');
-    echo tep_draw_bootstrap_button(IMAGE_CANCEL, 'fas fa-angle-left', tep_href_link('specials.php'), null, null, 'btn-light mt-2'); 
     ?>
 
   </form>
@@ -159,7 +176,7 @@
 ?>
 
   <div class="row no-gutters">
-    <div class="col">
+    <div class="col-12 col-sm-8">
       <div class="table-responsive">
         <table class="table table-striped table-hover">
           <thead class="thead-dark">
@@ -185,7 +202,7 @@
               }
 
               if (isset($sInfo) && is_object($sInfo) && ($specials['specials_id'] == $sInfo->specials_id)) {
-                echo '<tr onclick="document.location.href=\'' . tep_href_link('specials.php', 'page=' . (int)$_GET['page'] . '&sID=' . (int)$sInfo->specials_id . '&action=edit') . '\'">' . "\n";
+                echo '<tr class="table-active" onclick="document.location.href=\'' . tep_href_link('specials.php', 'page=' . (int)$_GET['page'] . '&sID=' . (int)$sInfo->specials_id . '&action=edit') . '\'">' . "\n";
               } else {
                 echo '<tr onclick="document.location.href=\'' . tep_href_link('specials.php', 'page=' . (int)$_GET['page'] . '&sID=' . (int)$specials['specials_id']) . '\'">' . "\n";
               }
@@ -194,7 +211,7 @@
                 <td><?php echo $currencies->format($specials['products_price']); ?></td>
                 <td class="text-danger"><?php echo $currencies->format($specials['specials_new_products_price']); ?></td>
                 <td class="text-right"><?php if ($specials['status'] == '1') { echo '<i class="fas fa-check-circle text-success"></i> <a href="' . tep_href_link('specials.php', 'action=setflag&flag=0&id=' . (int)$specials['specials_id']) . '"><i class="fas fa-times-circle text-muted"></i></a>'; } else { echo '<a href="' . tep_href_link('specials.php', 'action=setflag&flag=1&id=' . (int)$specials['specials_id']) . '"><i class="fas fa-check-circle text-muted"></i></a> <i class="fas fa-times-circle text-danger"></i>'; } ?></td>
-                <td class="text-right"><?php if (isset($sInfo) && is_object($sInfo) && ($specials['specials_id'] == $sInfo->specials_id)) { echo '<i class="fas fa-chevron-circle-right text-info"></i>'; } else { echo '<a href="' . tep_href_link('specials.php', 'page=' . $_GET['page'] . '&sID=' . $specials['specials_id']) . '"><i class="fas fa-info-circle text-muted"></i></a>'; } ?></td>
+                <td class="text-right"><?php if (isset($sInfo) && is_object($sInfo) && ($specials['specials_id'] == $sInfo->specials_id)) { echo '<i class="fas fa-chevron-circle-right text-info"></i>'; } else { echo '<a href="' . tep_href_link('specials.php', 'page=' . (int)$_GET['page'] . '&sID=' . $specials['specials_id']) . '"><i class="fas fa-info-circle text-muted"></i></a>'; } ?></td>
               </tr>
 <?php
     }
@@ -208,48 +225,40 @@
         <div class="col text-right mr-2"><?php echo $specials_split->display_links($specials_query_numrows, MAX_DISPLAY_SEARCH_RESULTS, MAX_DISPLAY_PAGE_LINKS, $_GET['page']); ?></div>
       </div>
       
-      <?php
-      if (empty($action)) {
-        echo '<div class="buttonSet mr-2 mt-2">';
-          echo tep_draw_bootstrap_button(BUTTON_INSERT_SPECIAL, 'fas fa-funnel-dollar', tep_href_link('specials.php', 'page=' . $_GET['page'] . '&action=new'), null, null, 'btn-success btn-block btn-lg xxx text-white');
-        echo '</div>';
-      }
-      ?>
-      
     </div>
 
 <?php
-  $heading = array();
-  $contents = array();
+  $heading = [];
+  $contents = [];
 
   switch ($action) {
     case 'delete':
-      $heading[] = array('text' => TEXT_INFO_HEADING_DELETE_SPECIALS);
+      $heading[] = ['text' => TEXT_INFO_HEADING_DELETE_SPECIALS];
 
-      $contents = array('form' => tep_draw_form('specials', 'specials.php', 'page=' . $_GET['page'] . '&sID=' . $sInfo->specials_id . '&action=deleteconfirm'));
-      $contents[] = array('text' => TEXT_INFO_DELETE_INTRO);
-      $contents[] = array('text' => '<strong>' . $sInfo->products_name . '</strong>');
-      $contents[] = array('class' => 'text-center', 'text' => tep_draw_button(IMAGE_DELETE, 'trash', null, 'primary') . tep_draw_button(IMAGE_CANCEL, 'close', tep_href_link('specials.php', 'page=' . $_GET['page'] . '&sID=' . $sInfo->specials_id)));
+      $contents = ['form' => tep_draw_form('specials', 'specials.php', 'page=' . (int)$_GET['page'] . '&sID=' . $sInfo->specials_id . '&action=deleteconfirm')];
+      $contents[] = ['text' => TEXT_INFO_DELETE_INTRO];
+      $contents[] = ['text' => '<strong>' . $sInfo->products_name . '</strong>'];
+      $contents[] = ['class' => 'text-center', 'text' => tep_draw_bootstrap_button(IMAGE_DELETE, 'fas fa-trash', null, 'primary', null, 'btn-danger mr-2') . tep_draw_bootstrap_button(IMAGE_CANCEL, 'fas fa-times', tep_href_link('specials.php', 'page=' . (int)$_GET['page'] . '&sID=' . $sInfo->specials_id), null, null, 'btn-light')];
       break;
     default:
-      if (is_object($sInfo)) {
-        $heading[] = array('text' => $sInfo->products_name);
+      if (is_object($sInfo ?? null)) {
+        $heading[] = ['text' => $sInfo->products_name];
 
-        $contents[] = array('class' => 'text-center', 'text' => tep_draw_button(IMAGE_EDIT, 'document', tep_href_link('specials.php', 'page=' . $_GET['page'] . '&sID=' . $sInfo->specials_id . '&action=edit')) . tep_draw_button(IMAGE_DELETE, 'trash', tep_href_link('specials.php', 'page=' . $_GET['page'] . '&sID=' . $sInfo->specials_id . '&action=delete')));
-        $contents[] = array('text' => TEXT_INFO_DATE_ADDED . ' ' . tep_date_short($sInfo->specials_date_added));
-        $contents[] = array('text' => TEXT_INFO_LAST_MODIFIED . ' ' . tep_date_short($sInfo->specials_last_modified));
-        $contents[] = array('class' => 'text-center', 'text' => tep_info_image($sInfo->products_image, $sInfo->products_name, SMALL_IMAGE_WIDTH, SMALL_IMAGE_HEIGHT));
-        $contents[] = array('text' => TEXT_INFO_ORIGINAL_PRICE . ' ' . $currencies->format($sInfo->products_price));
-        $contents[] = array('text' => TEXT_INFO_NEW_PRICE . ' ' . $currencies->format($sInfo->specials_new_products_price));
-        $contents[] = array('text' => TEXT_INFO_PERCENTAGE . ' ' . number_format(100 - (($sInfo->specials_new_products_price / $sInfo->products_price) * 100)) . '%');
+        $contents[] = ['class' => 'text-center', 'text' => tep_draw_bootstrap_button(IMAGE_EDIT, 'fas fa-cogs', tep_href_link('specials.php', 'page=' . (int)$_GET['page'] . '&sID=' . $sInfo->specials_id . '&action=edit'), null, null, 'btn-warning mr-2') . tep_draw_bootstrap_button(IMAGE_DELETE, 'fas fa-trash', tep_href_link('specials.php', 'page=' . (int)$_GET['page'] . '&sID=' . $sInfo->specials_id . '&action=delete'), null, null, 'btn-danger mr-2')];
+        $contents[] = ['text' => TEXT_INFO_DATE_ADDED . ' ' . tep_date_short($sInfo->specials_date_added)];
+        $contents[] = ['text' => TEXT_INFO_LAST_MODIFIED . ' ' . tep_date_short($sInfo->specials_last_modified)];
+        $contents[] = ['class' => 'text-center', 'text' => tep_info_image($sInfo->products_image, $sInfo->products_name, SMALL_IMAGE_WIDTH, SMALL_IMAGE_HEIGHT)];
+        $contents[] = ['text' => TEXT_INFO_ORIGINAL_PRICE . ' ' . $currencies->format($sInfo->products_price)];
+        $contents[] = ['text' => TEXT_INFO_NEW_PRICE . ' ' . $currencies->format($sInfo->specials_new_products_price)];
+        $contents[] = ['text' => TEXT_INFO_PERCENTAGE . ' ' . number_format(100 - (($sInfo->specials_new_products_price / $sInfo->products_price) * 100)) . '%'];
 
-        $contents[] = array('text' => TEXT_INFO_EXPIRES_DATE . ' <strong>' . tep_date_short($sInfo->expires_date) . '</strong>');
-        $contents[] = array('text' => TEXT_INFO_STATUS_CHANGE . ' ' . tep_date_short($sInfo->date_status_change));
+        $contents[] = ['text' => TEXT_INFO_EXPIRES_DATE . ' <strong>' . tep_date_short($sInfo->expires_date) . '</strong>'];
+        $contents[] = ['text' => TEXT_INFO_STATUS_CHANGE . ' ' . tep_date_short($sInfo->date_status_change)];
       }
       break;
   }
   if ( (tep_not_null($heading)) && (tep_not_null($contents)) ) {
-    echo '<div class="col-12 col-sm-3">';
+    echo '<div class="col-12 col-sm-4">';
       $box = new box;
       echo $box->infoBox($heading, $contents);
     echo '</div>';

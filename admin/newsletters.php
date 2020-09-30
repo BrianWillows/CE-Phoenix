@@ -13,6 +13,8 @@
   require('includes/application_top.php');
 
   $action = $_GET['action'] ?? '';
+  
+  $OSCOM_Hooks->call('newsletters', 'preAction');
 
   if (tep_not_null($action)) {
     switch ($action) {
@@ -22,8 +24,15 @@
         $status = (($action == 'lock') ? '1' : '0');
 
         tep_db_query("update newsletters set locked = '" . $status . "' where newsletters_id = '" . (int)$newsletter_id . "'");
+        
+        if ($action == 'lock') {
+          $OSCOM_Hooks->call('newsletters', 'lockAction');
+        }
+        else {
+          $OSCOM_Hooks->call('newsletters', 'unlockAction');
+        }
 
-        tep_redirect(tep_href_link('newsletters.php', 'page=' . $_GET['page'] . '&nID=' . $_GET['nID']));
+        tep_redirect(tep_href_link('newsletters.php', 'page=' . (int)$_GET['page'] . '&nID=' . $_GET['nID']));
         break;
       case 'insert':
       case 'update':
@@ -51,9 +60,9 @@
         }
 
         if ($newsletter_error == false) {
-          $sql_data_array = array('title' => $title,
-                                  'content' => $content,
-                                  'module' => $newsletter_module);
+          $sql_data_array = ['title' => $title,
+                             'content' => $content,
+                             'module' => $newsletter_module];
 
           if ($action == 'insert') {
             $sql_data_array['date_added'] = 'now()';
@@ -65,8 +74,14 @@
           } elseif ($action == 'update') {
             tep_db_perform('newsletters', $sql_data_array, 'update', "newsletters_id = '" . (int)$newsletter_id . "'");
           }
+          
+          if ($action == 'insert') {
+            $OSCOM_Hooks->call('newsletters', 'insertAction');
+          } elseif ($action == 'update') {
+            $OSCOM_Hooks->call('newsletters', 'updateAction');            
+          }
 
-          tep_redirect(tep_href_link('newsletters.php', (isset($_GET['page']) ? 'page=' . $_GET['page'] . '&' : '') . 'nID=' . $newsletter_id));
+          tep_redirect(tep_href_link('newsletters.php', (isset($_GET['page']) ? 'page=' . (int)$_GET['page'] . '&' : '') . 'nID=' . $newsletter_id));
         } else {
           $action = 'new';
         }
@@ -75,8 +90,10 @@
         $newsletter_id = tep_db_prepare_input($_GET['nID']);
 
         tep_db_query("delete from newsletters where newsletters_id = '" . (int)$newsletter_id . "'");
+        
+        $OSCOM_Hooks->call('newsletters', 'deleteConfirmAction');
 
-        tep_redirect(tep_href_link('newsletters.php', 'page=' . $_GET['page']));
+        tep_redirect(tep_href_link('newsletters.php', 'page=' . (int)$_GET['page']));
         break;
       case 'delete':
       case 'new': if (!isset($_GET['nID'])) break;
@@ -97,11 +114,13 @@
 
           $messageStack->add_session($error, 'error');
 
-          tep_redirect(tep_href_link('newsletters.php', 'page=' . $_GET['page'] . '&nID=' . $_GET['nID']));
+          tep_redirect(tep_href_link('newsletters.php', 'page=' . (int)$_GET['page'] . '&nID=' . $_GET['nID']));
         }
         break;
     }
   }
+  
+  $OSCOM_Hooks->call('newsletters', 'postAction');
 
   require('includes/template_top.php');
 ?>
@@ -110,22 +129,22 @@
     <div class="col">
       <h1 class="display-4 mb-2"><?php echo HEADING_TITLE; ?></h1>
     </div>
-    <?php
-    if (empty($action)) {
-      echo '<div class="col text-right align-self-center">';
-        echo tep_draw_bootstrap_button(IMAGE_NEW_NEWSLETTER, 'fas fa-newspaper', tep_href_link('newsletters.php', 'action=new'), null, null, 'btn-danger xxx text-white');
-      echo '</div>';
-    }
-    ?>
+    <div class="col text-right align-self-center">
+      <?php
+      if (empty($action)) {
+        echo tep_draw_bootstrap_button(IMAGE_NEW_NEWSLETTER, 'fas fa-newspaper', tep_href_link('newsletters.php', 'action=new'), null, null, 'btn-danger');
+      } else {
+        echo tep_draw_bootstrap_button(IMAGE_BACK, 'fas fa-angle-left', tep_href_link('newsletters.php'), null, null, 'btn-light');
+      }
+      ?>
+    </div>
   </div>
 
   <?php
   if ($action == 'new') {
     $form_action = 'insert';
 
-    $parameters = array('title' => '',
-                        'content' => '',
-                        'module' => '');
+    $parameters = ['title' => '', 'content' => '', 'module' => ''];
 
     $nInfo = new objectInfo($parameters);
 
@@ -143,7 +162,7 @@
     }
 
     $file_extension = substr($PHP_SELF, strrpos($PHP_SELF, '.'));
-    $directory_array = array();
+    $directory_array = [];
     if ($dir = dir('includes/modules/newsletters/')) {
       while ($file = $dir->read()) {
         if (!is_dir('includes/modules/newsletters/' . $file)) {
@@ -157,38 +176,42 @@
     }
 
     for ($i=0, $n=sizeof($directory_array); $i<$n; $i++) {
-      $modules_array[] = array('id' => substr($directory_array[$i], 0, strrpos($directory_array[$i], '.')), 'text' => substr($directory_array[$i], 0, strrpos($directory_array[$i], '.')));
+      $modules_array[] = ['id' => substr($directory_array[$i], 0, strrpos($directory_array[$i], '.')), 'text' => substr($directory_array[$i], 0, strrpos($directory_array[$i], '.'))];
     }
 
-    echo tep_draw_form('newsletter', 'newsletters.php', (isset($_GET['page']) ? 'page=' . $_GET['page'] . '&' : '') . 'action=' . $form_action); if ($form_action == 'update') echo tep_draw_hidden_field('newsletter_id', $nID); ?>
+    echo tep_draw_form('newsletter', 'newsletters.php', (isset($_GET['page']) ? 'page=' . (int)$_GET['page'] . '&' : '') . 'action=' . $form_action); if ($form_action == 'update') echo tep_draw_hidden_field('newsletter_id', $nID); ?>
 
     <div class="form-group row">
       <label for="Module" class="col-form-label col-sm-3 text-left text-sm-right"><?php echo TEXT_NEWSLETTER_MODULE; ?></label>
       <div class="col-sm-9">
-        <?php echo tep_draw_pull_down_menu('module', $modules_array, $nInfo->module, 'id="Module" class="form-control" required aria-required="true"'); ?>
+        <?php echo tep_draw_pull_down_menu('module', $modules_array, $nInfo->module, 'id="Module" required aria-required="true"'); ?>
       </div>
     </div>
 
     <div class="form-group row">
       <label for="Title" class="col-form-label col-sm-3 text-left text-sm-right"><?php echo TEXT_NEWSLETTER_TITLE; ?></label>
       <div class="col-sm-9">
-        <?php echo tep_draw_input_field('title', $nInfo->title, 'class="form-control" id="Title" required aria-required="true"'); ?>
+        <?php echo tep_draw_input_field('title', $nInfo->title, 'id="Title" required aria-required="true"'); ?>
       </div>
     </div>
 
     <div class="form-group row">
       <label for="Content" class="col-form-label col-sm-3 text-left text-sm-right"><?php echo TEXT_NEWSLETTER_CONTENT; ?></label>
       <div class="col-sm-9">
-        <?php echo tep_draw_textarea_field('content', 'soft', '60', '15', $nInfo->content, 'class="form-control" id="Content" required aria-required="true"'); ?>
+        <?php echo tep_draw_textarea_field('content', 'soft', '60', '15', $nInfo->content, 'id="Content" required aria-required="true"'); ?>
       </div>
     </div>
 
     <div class="buttonSet">
       <?php
       echo tep_draw_bootstrap_button(IMAGE_SAVE, 'fas fa-save', null, 'primary', null, 'btn-success btn-block btn-lg');
-      echo tep_draw_bootstrap_button(IMAGE_CANCEL, 'fas fa-angle-left', tep_href_link('newsletters.php', (isset($_GET['page']) ? 'page=' . $_GET['page'] . '&' : '') . (isset($_GET['nID']) ? 'nID=' . (int)$_GET['nID'] : '')), null, null, 'btn-light mt-2');
+      echo tep_draw_bootstrap_button(IMAGE_CANCEL, 'fas fa-angle-left', tep_href_link('newsletters.php', (isset($_GET['page']) ? 'page=' . (int)$_GET['page'] . '&' : '') . (isset($_GET['nID']) ? 'nID=' . (int)$_GET['nID'] : '')), null, null, 'btn-light mt-2');
       ?>
     </div>
+    
+    <?php
+    echo $OSCOM_Hooks->call('newsletters', 'newForm');
+    ?>
 
   </form>
 
@@ -211,11 +234,14 @@
         <th><?php echo TEXT_CONTENT; ?></th>
         <td><?php echo nl2br($nInfo->content); ?></td>
       </tr>
+      <?php
+      echo $OSCOM_Hooks->call('newsletters', 'preview');
+      ?>
     </table>
 
     <div class="buttonSet">
       <?php
-      echo tep_draw_bootstrap_button(IMAGE_BACK, 'fas fa-angle-left',  tep_href_link('newsletters.php', 'page=' . $_GET['page'] . '&nID=' . $_GET['nID']), 'primary', null, 'btn-light');
+      echo tep_draw_bootstrap_button(IMAGE_BACK, 'fas fa-angle-left',  tep_href_link('newsletters.php', 'page=' . (int)$_GET['page'] . '&nID=' . $_GET['nID']), 'primary', null, 'btn-light');
       ?>
     </div>
 
@@ -287,7 +313,7 @@
   
   <div class="buttonSet">
     <?php
-    echo tep_draw_bootstrap_button(IMAGE_BACK, 'fas fa-angle-left', tep_href_link('newsletters.php', 'page=' . $_GET['page'] . '&nID=' . $_GET['nID']), 'primary', null, 'btn-light mt-2');
+    echo tep_draw_bootstrap_button(IMAGE_BACK, 'fas fa-angle-left', tep_href_link('newsletters.php', 'page=' . (int)$_GET['page'] . '&nID=' . $_GET['nID']), 'primary', null, 'btn-light mt-2');
     ?>
   </div>
 
@@ -296,7 +322,7 @@
 ?>
 
    <div class="row no-gutters">
-    <div class="col">
+    <div class="col-12 col-sm-8">
       <div class="table-responsive">
         <table class="table table-striped table-hover">
           <thead class="thead-dark">
@@ -321,7 +347,7 @@
             }
 
             if (isset($nInfo) && is_object($nInfo) && ($newsletters['newsletters_id'] == $nInfo->newsletters_id) ) {
-              echo '<tr onclick="document.location.href=\'' . tep_href_link('newsletters.php', 'page=' . (int)$_GET['page'] . '&nID=' . (int)$nInfo->newsletters_id . '&action=preview') . '\'">';
+              echo '<tr class="table-active" onclick="document.location.href=\'' . tep_href_link('newsletters.php', 'page=' . (int)$_GET['page'] . '&nID=' . (int)$nInfo->newsletters_id . '&action=preview') . '\'">';
             } else {
               echo '<tr onclick="document.location.href=\'' . tep_href_link('newsletters.php', 'page=' . (int)$_GET['page'] . '&nID=' . (int)$newsletters['newsletters_id']) . '\'">';
             }
@@ -332,7 +358,7 @@
               <td><?php echo number_format($newsletters['content_length']) . ' bytes'; ?></td>
               <td class="text-center"><?php if ($newsletters['status'] == '1') { echo '<i class="fas fa-check-circle text-success"></i>'; } else { echo '<i class="fas fa-times-circle text-danger"></i>'; } ?></td>
               <td class="text-center"><?php if ($newsletters['locked'] > 0) { echo '<i class="fas fa-lock text-success"></i>'; } else { echo '<i class="fas fa-lock-open text-danger"></i>'; } ?></td>
-              <td class="text-right"><?php if (isset($nInfo) && is_object($nInfo) && ($newsletters['newsletters_id'] == $nInfo->newsletters_id) ) { echo '<i class="fas fa-chevron-circle-right text-info"></i>'; } else { echo '<a href="' . tep_href_link('newsletters.php', 'page=' . $_GET['page'] . '&nID=' . $newsletters['newsletters_id']) . '"><i class="fas fa-info-circle text-muted"></i></a>'; } ?></td>
+              <td class="text-right"><?php if (isset($nInfo) && is_object($nInfo) && ($newsletters['newsletters_id'] == $nInfo->newsletters_id) ) { echo '<i class="fas fa-chevron-circle-right text-info"></i>'; } else { echo '<a href="' . tep_href_link('newsletters.php', 'page=' . (int)$_GET['page'] . '&nID=' . $newsletters['newsletters_id']) . '"><i class="fas fa-info-circle text-muted"></i></a>'; } ?></td>
             </tr>
             <?php
           }
@@ -341,43 +367,45 @@
         </table>
       </div>
 
-      <div class="row">
+      <div class="row my-1">
         <div class="col"><?php echo $newsletters_split->display_count($newsletters_query_numrows, MAX_DISPLAY_SEARCH_RESULTS, $_GET['page'], TEXT_DISPLAY_NUMBER_OF_NEWSLETTERS); ?></div>
-        <div class="col text-right"><?php echo $newsletters_split->display_links($newsletters_query_numrows, MAX_DISPLAY_SEARCH_RESULTS, MAX_DISPLAY_PAGE_LINKS, $_GET['page']); ?></div>
+        <div class="col text-right mr-2"><?php echo $newsletters_split->display_links($newsletters_query_numrows, MAX_DISPLAY_SEARCH_RESULTS, MAX_DISPLAY_PAGE_LINKS, $_GET['page']); ?></div>
       </div>
 
     </div>
 
 <?php
-  $heading = array();
-  $contents = array();
+  $heading = [];
+  $contents = [];
 
   switch ($action) {
     case 'delete':
-      $heading[] = array('text' => $nInfo->title);
+      $heading[] = ['text' => $nInfo->title];
 
-      $contents = array('form' => tep_draw_form('newsletters', 'newsletters.php', 'page=' . (int)$_GET['page'] . '&nID=' . (int)$nInfo->newsletters_id . '&action=deleteconfirm'));
-      $contents[] = array('text' => TEXT_INFO_DELETE_INTRO);
-      $contents[] = array('text' => '<strong>' . $nInfo->title . '</strong>');
-      $contents[] = array('class' => 'text-center', 'text' => tep_draw_button(IMAGE_DELETE, 'trash', null, 'primary') . tep_draw_button(IMAGE_CANCEL, 'close', tep_href_link('newsletters.php', 'page=' . (int)$_GET['page'] . '&nID=' . (int)$_GET['nID'])));
+      $contents = ['form' => tep_draw_form('newsletters', 'newsletters.php', 'page=' . (int)$_GET['page'] . '&nID=' . (int)$nInfo->newsletters_id . '&action=deleteconfirm')];
+      $contents[] = ['text' => TEXT_INFO_DELETE_INTRO];
+      $contents[] = ['text' => '<strong>' . $nInfo->title . '</strong>'];
+      $contents[] = ['class' => 'text-center', 'text' => tep_draw_bootstrap_button(IMAGE_DELETE, 'fas fa-trash', null, 'primary', null, 'btn-danger mr-2') . tep_draw_bootstrap_button(IMAGE_CANCEL, 'fas fa-times', tep_href_link('newsletters.php', 'page=' . (int)$_GET['page'] . '&nID=' . (int)$_GET['nID']), null, null, 'btn-light')];
       break;
     default:
       if (isset($nInfo) && is_object($nInfo)) {
-        $heading[] = array('text' => $nInfo->title);
+        $heading[] = ['text' => $nInfo->title];
 
         if ($nInfo->locked > 0) {
-          $contents[] = array('class' => 'text-center', 'text' => tep_draw_button(IMAGE_EDIT, 'document', tep_href_link('newsletters.php', 'page=' . (int)$_GET['page'] . '&nID=' . (int)$nInfo->newsletters_id . '&action=new')) . tep_draw_button(IMAGE_DELETE, 'trash', tep_href_link('newsletters.php', 'page=' . (int)$_GET['page'] . '&nID=' . (int)$nInfo->newsletters_id . '&action=delete')) . tep_draw_button(IMAGE_PREVIEW, 'document', tep_href_link('newsletters.php', 'page=' . (int)$_GET['page'] . '&nID=' . (int)$nInfo->newsletters_id . '&action=preview')) . tep_draw_button(IMAGE_SEND, 'mail-closed', tep_href_link('newsletters.php', 'page=' . (int)$_GET['page'] . '&nID=' . (int)$nInfo->newsletters_id . '&action=send')) . tep_draw_button(IMAGE_UNLOCK, 'unlocked', tep_href_link('newsletters.php', 'page=' . (int)$_GET['page'] . '&nID=' . (int)$nInfo->newsletters_id . '&action=unlock')));
+          $contents[] = ['class' => 'text-center', 'text' => tep_draw_bootstrap_button(IMAGE_EDIT, 'fas fa-cogs', tep_href_link('newsletters.php', 'page=' . (int)$_GET['page'] . '&nID=' . (int)$nInfo->newsletters_id . '&action=new'), null, null, 'btn-warning mr-2') . tep_draw_bootstrap_button(IMAGE_DELETE, 'fas fa-trash', tep_href_link('newsletters.php', 'page=' . (int)$_GET['page'] . '&nID=' . (int)$nInfo->newsletters_id . '&action=delete'), null, null, 'btn-danger mr-2')];
+          $contents[] = ['class' => 'text-center', 'text' => tep_draw_bootstrap_button(IMAGE_PREVIEW, 'fas fa-eye', tep_href_link('newsletters.php', 'page=' . (int)$_GET['page'] . '&nID=' . (int)$nInfo->newsletters_id . '&action=preview'), null, null, 'btn-light mr-2') . tep_draw_bootstrap_button(IMAGE_UNLOCK, 'fas fa-lock-open', tep_href_link('newsletters.php', 'page=' . (int)$_GET['page'] . '&nID=' . (int)$nInfo->newsletters_id . '&action=unlock'), null, null, 'btn-warning')];
+          $contents[] = ['class' => 'text-center', 'text' => tep_draw_bootstrap_button(IMAGE_SEND, 'fas fa-paper-plane', tep_href_link('newsletters.php', 'page=' . (int)$_GET['page'] . '&nID=' . (int)$nInfo->newsletters_id . '&action=send'), null, null, 'btn-success btn-block')];
         } else {
-          $contents[] = array('class' => 'text-center', 'text' => tep_draw_button(IMAGE_PREVIEW, 'document', tep_href_link('newsletters.php', 'page=' . (int)$_GET['page'] . '&nID=' . (int)$nInfo->newsletters_id . '&action=preview')) . tep_draw_button(IMAGE_LOCK, 'locked', tep_href_link('newsletters.php', 'page=' . (int)$_GET['page'] . '&nID=' . (int)$nInfo->newsletters_id . '&action=lock')));
+          $contents[] = ['class' => 'text-center', 'text' => tep_draw_bootstrap_button(IMAGE_PREVIEW, 'fas fa-eye', tep_href_link('newsletters.php', 'page=' . (int)$_GET['page'] . '&nID=' . (int)$nInfo->newsletters_id . '&action=preview'), null, null, 'bt-info mr-2') . tep_draw_bootstrap_button(IMAGE_LOCK, 'fas fa-lock', tep_href_link('newsletters.php', 'page=' . (int)$_GET['page'] . '&nID=' . (int)$nInfo->newsletters_id . '&action=lock'), null, null, 'btn-warning')];
         }
-        $contents[] = array('text' => sprintf(TEXT_NEWSLETTER_DATE_ADDED, tep_date_short($nInfo->date_added)));
-        if ($nInfo->status == '1') $contents[] = array('text' => sprintf(TEXT_NEWSLETTER_DATE_SENT, tep_date_short($nInfo->date_sent)));
+        $contents[] = ['text' => sprintf(TEXT_NEWSLETTER_DATE_ADDED, tep_date_short($nInfo->date_added))];
+        if ($nInfo->status == '1') $contents[] = ['text' => sprintf(TEXT_NEWSLETTER_DATE_SENT, tep_date_short($nInfo->date_sent))];
       }
       break;
   }
 
   if ( (tep_not_null($heading)) && (tep_not_null($contents)) ) {
-    echo '<div class="col-12 col-sm-3">';
+    echo '<div class="col-12 col-sm-4">';
       $box = new box;
       echo $box->infoBox($heading, $contents);
     echo '</div>';

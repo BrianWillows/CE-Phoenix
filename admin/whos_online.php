@@ -26,7 +26,7 @@
   <h1 class="display-4 mb-2"><?php echo HEADING_TITLE; ?></h1>
   
   <div class="row no-gutters">
-    <div class="col">
+    <div class="col-12 col-sm-8">
       <div class="table-responsive">
         <table class="table table-striped table-hover">
           <thead class="thead-dark">
@@ -50,7 +50,7 @@
             }
 
             if (isset($info) && ($whos_online['session_id'] == $info->session_id)) {
-              echo '<tr>';
+              echo '<tr class="table-active">';
             } else {
               echo '<tr onclick="document.location.href=\'' . tep_href_link('whos_online.php', tep_get_all_get_params(array('info', 'action')) . 'info=' . $whos_online['session_id']) . '\'">';
             }
@@ -75,11 +75,11 @@
     </div>
 
 <?php
-  $heading = array();
-  $contents = array();
+  $heading = [];
+  $contents = [];
 
   if (isset($info)) {
-    $heading[] = array('text' => TABLE_HEADING_SHOPPING_CART);
+    $heading[] = ['text' => TABLE_HEADING_SHOPPING_CART];
 
     if ( $info->customer_id > 0 ) {
       $products_query = tep_db_query("select cb.*, pd.* from customers_basket cb, products_description pd where cb.customers_id = '" . (int)$info->customer_id . "' and cb.products_id = pd.products_id and pd.language_id = '" . (int)$languages_id . "'");
@@ -88,16 +88,16 @@
         $shoppingCart = new shoppingCart();
 
         while ( $products = tep_db_fetch_array($products_query) ) {
-          $contents[] = array('text' => sprintf(TEXT_SHOPPING_CART_ITEM, $products['customers_basket_quantity'], $products['products_name']));
+          $contents[] = ['text' => sprintf(TEXT_SHOPPING_CART_ITEM, $products['customers_basket_quantity'], $products['products_name'])];
 
-          $attributes = array();
+          $attributes = [];
 
           if ( strpos($products['products_id'], '{') !== false ) {
-            $combos = array();
+            $combos = [];
             preg_match_all('/(\{[0-9]+\}[0-9]+){1}/', $products['products_id'], $combos);
 
             foreach ( $combos[0] as $combo ) {
-              $att = array();
+              $att = [];
               preg_match('/\{([0-9]+)\}([0-9]+)/', $combo, $att);
 
               $attributes[$att[1]] = $att[2];
@@ -107,17 +107,17 @@
           $shoppingCart->add_cart(tep_get_prid($products['products_id']), $products['customers_basket_quantity'], $attributes);
         }
         
-        $contents[] = array('class' => 'table-dark text-right', 'text'  => sprintf(TEXT_SHOPPING_CART_SUBTOTAL, $currencies->format($shoppingCart->show_total())));
+        $contents[] = ['class' => 'table-dark text-right', 'text'  => sprintf(TEXT_SHOPPING_CART_SUBTOTAL, $currencies->format($shoppingCart->show_total()))];
       } else {
-        $contents[] = array('text' => '&nbsp;');
+        $contents[] = ['text' => '&nbsp;'];
       }
     } else {
-      $contents[] = array('text' => TEXT_SHOPPING_CART_NA);
+      $contents[] = ['text' => TEXT_SHOPPING_CART_NA];
     }
   }
 
   if ( (tep_not_null($heading)) && (tep_not_null($contents)) ) {
-    echo '<div class="col-12 col-sm-3">';
+    echo '<div class="col-12 col-sm-4">';
       $box = new box;
       echo $box->infoBox($heading, $contents);
     echo '</div>';

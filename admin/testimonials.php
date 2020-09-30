@@ -14,7 +14,7 @@
 
   $action = $_GET['action'] ?? '';
   
-  $OSCOM_Hooks->call('testimonials', 'testimonialsPreAction');
+  $OSCOM_Hooks->call('testimonials', 'preAction');
 
   if (tep_not_null($action)) {
     switch ($action) {
@@ -24,8 +24,10 @@
             tep_db_query("update testimonials set testimonials_status = '" . (int)$_GET['flag'] . "' where testimonials_id = '" . (int)$_GET['tID'] . "'");
           }
         }
+        
+        $OSCOM_Hooks->call('testimonials', 'setFlagAction');
 
-        tep_redirect(tep_href_link('testimonials.php', 'page=' . $_GET['page'] . '&tID=' . $_GET['tID']));
+        tep_redirect(tep_href_link('testimonials.php', 'page=' . (int)$_GET['page'] . '&tID=' . $_GET['tID']));
         break;
       case 'update':
         $customers_id = (int)$_POST['customers_id'];
@@ -37,9 +39,9 @@
         tep_db_query("update testimonials set customers_id = '" . (int)$customers_id . "', customers_name  = '" . tep_db_input($customers_name) . "', testimonials_status = '" . tep_db_input($testimonials_status) . "', last_modified = now() where testimonials_id = '" . (int)$testimonials_id . "'");
         tep_db_query("update testimonials_description set testimonials_text = '" . tep_db_input($testimonials_text) . "' where testimonials_id = '" . (int)$testimonials_id . "'");
 
-        $OSCOM_Hooks->call('testimonials', 'testimonialsActionUpdate');
+        $OSCOM_Hooks->call('testimonials', 'updateAction');
         
-        tep_redirect(tep_href_link('testimonials.php', 'page=' . $_GET['page'] . '&tID=' . $testimonials_id));
+        tep_redirect(tep_href_link('testimonials.php', 'page=' . (int)$_GET['page'] . '&tID=' . $testimonials_id));
         break;
       case 'deleteconfirm':
         $testimonials_id = tep_db_prepare_input($_GET['tID']);
@@ -47,9 +49,9 @@
         tep_db_query("delete from testimonials where testimonials_id = '" . (int)$testimonials_id . "'");
         tep_db_query("delete from testimonials_description where testimonials_id = '" . (int)$testimonials_id . "'");
         
-        $OSCOM_Hooks->call('testimonials', 'testimonialsActionDelete');
+        $OSCOM_Hooks->call('testimonials', 'deleteConfirmAction');
 
-        tep_redirect(tep_href_link('testimonials.php', 'page=' . $_GET['page']));
+        tep_redirect(tep_href_link('testimonials.php', 'page=' . (int)$_GET['page']));
         break;
         
       case 'addnew':
@@ -61,21 +63,30 @@
         $insert_id = tep_db_insert_id();
         tep_db_query("insert into testimonials_description (testimonials_id, languages_id, testimonials_text) values ('" . (int)$insert_id . "', '" . (int)$languages_id . "', '" . tep_db_input($testimonial) . "')");
         
-        $OSCOM_Hooks->call('testimonials', 'testimonialsActionSave');
+        $OSCOM_Hooks->call('testimonials', 'addNewAction');
 
         tep_redirect(tep_href_link('testimonials.php', tep_get_all_get_params(array('action'))));
         break;
     }
   }
   
-  $OSCOM_Hooks->call('testimonials', 'testimonialsPostAction');
+  $OSCOM_Hooks->call('testimonials', 'postAction');
 
   require('includes/template_top.php');
 ?>
 
   <div class="row">
     <div class="col"><h1 class="display-4 mb-2"><?php echo HEADING_TITLE; ?></h1></div>
-    <div class="col text-right align-self-center"><?php echo tep_draw_bootstrap_button(IMAGE_BUTTON_ADD_TESTIMONIAL, 'fas fa-pen', tep_href_link('testimonials.php', 'action=new'), null, null, 'btn-danger xxx text-white'); ?></div>
+    <div class="col text-right align-self-center">
+      <?php
+      if (empty($action)) {
+        echo tep_draw_bootstrap_button(IMAGE_BUTTON_ADD_TESTIMONIAL, 'fas fa-pen', tep_href_link('testimonials.php', 'action=new'), null, null, 'btn-danger');
+      }
+      else {
+        echo tep_draw_bootstrap_button(IMAGE_CANCEL, 'fas fa-angle-left', tep_href_link('testimonials.php'), null, null, 'btn-light mt-2');
+      }
+      ?>
+    </div>
   </div>
 
 <?php
@@ -94,17 +105,17 @@
       default: $in_status = true; $out_status = false;
     }
 ?>
-      <?php echo tep_draw_form('testimonial', 'testimonials.php', 'page=' . $_GET['page'] . '&tID=' . $_GET['tID'] . '&action=update'); ?>
+      <?php echo tep_draw_form('testimonial', 'testimonials.php', 'page=' . (int)$_GET['page'] . '&tID=' . $_GET['tID'] . '&action=update', 'post', 'enctype="multipart/form-data"'); ?>
         
         <div class="form-group row align-items-center">
           <label class="col-form-label col-sm-3 text-left text-sm-right"><?php echo TEXT_INFO_TESTIMONIAL_STATUS; ?></label>
           <div class="col-sm-9">
             <div class="custom-control custom-radio custom-control-inline">
-              <?php echo tep_draw_selection_field('testimonials_status', 'radio', '1', $in_status, null, 'id="inStatus" class="custom-control-input"'); ?>
+              <?php echo tep_draw_selection_field('testimonials_status', 'radio', '1', $in_status, 'id="inStatus" class="custom-control-input"'); ?>
               <label class="custom-control-label" for="inStatus"><?php echo TEXT_TESTIMONIAL_PUBLISHED; ?></label>
             </div>
             <div class="custom-control custom-radio custom-control-inline">
-              <?php echo tep_draw_selection_field('testimonials_status', 'radio', '0', $out_status, null, 'id="outStatus" class="custom-control-input"'); ?>
+              <?php echo tep_draw_selection_field('testimonials_status', 'radio', '0', $out_status, 'id="outStatus" class="custom-control-input"'); ?>
               <label class="custom-control-label" for="outStatus"><?php echo TEXT_TESTIMONIAL_NOT_PUBLISHED; ?></label>
             </div>    
           </div>
@@ -113,14 +124,14 @@
         <div class="form-group row">
           <label for="inputFrom" class="col-form-label col-sm-3 text-left text-sm-right"><?php echo ENTRY_FROM; ?></label>
           <div class="col-sm-9">
-            <?php echo tep_draw_customers('customers_id', 'id="inputFrom" class="form-control"', $tInfo->customers_id); ?>
+            <?php echo tep_draw_customers('customers_id', 'id="inputFrom"', $tInfo->customers_id); ?>
           </div>
         </div>
         
         <div class="form-group row">
           <label for="inputNick" class="col-form-label col-sm-3 text-left text-sm-right"><?php echo ENTRY_FROM_NICKNAME; ?></label>
           <div class="col-sm-9">
-            <?php echo tep_draw_input_field('customer_name', $tInfo->customers_name, 'required aria-required="true" id="inputNick" class="form-control"'); 
+            <?php echo tep_draw_input_field('customer_name', $tInfo->customers_name, 'required aria-required="true" id="inputNick"'); 
             ?>
           </div>
         </div>
@@ -128,36 +139,39 @@
         <div class="form-group row">
           <label for="inputText" class="col-form-label col-sm-3 text-left text-sm-right"><?php echo ENTRY_TESTIMONIAL; ?></label>
           <div class="col-sm-9">
-            <?php echo tep_draw_textarea_field('testimonials_text', 'soft', '60', '15', $tInfo->testimonials_text, 'required aria-required="true" id="inputText" class="form-control"'); ?>
+            <?php echo tep_draw_textarea_field('testimonials_text', 'soft', '60', '15', $tInfo->testimonials_text, 'required aria-required="true" id="inputText" aria-describedby="TextHelp"'); ?>
+            <small id="TextHelp" class="form-text text-muted"><?php echo ENTRY_TESTIMONIAL_HTML_DISPLAYED; ?></small>
           </div>
         </div>
         
-        <?php 
+        <?php
+        echo $OSCOM_Hooks->call('testimonials', 'formEdit');
+
         echo tep_draw_hidden_field('testimonials_id', $tInfo->testimonials_id);
         echo tep_draw_hidden_field('customers_name', $tInfo->customers_name);
         echo tep_draw_hidden_field('date_added', $tInfo->date_added);
         
         echo tep_draw_bootstrap_button(IMAGE_SAVE, 'fas fa-save', null, 'primary', null, 'btn-success btn-block btn-lg');
-        echo tep_draw_bootstrap_button(IMAGE_CANCEL, 'fas fa-angle-left', tep_href_link('testimonials.php'), null, null, 'btn-light mt-2'); 
         ?>
 
       </form>
 <?php
   } elseif ($action == 'new') {
-    ?>
-      <?php echo tep_draw_form('review', 'testimonials.php', 'action=addnew'); ?>
+    
+      echo tep_draw_form('review', 'testimonials.php', 'action=addnew', 'post', 'enctype="multipart/form-data"'); 
+      ?>
       
         <div class="form-group row">
           <label for="inputFrom" class="col-form-label col-sm-3 text-left text-sm-right"><?php echo ENTRY_FROM; ?></label>
           <div class="col-sm-9">
-            <?php echo tep_draw_customers('customers_id', 'id="inputFrom" class="form-control"'); ?>
+            <?php echo tep_draw_customers('customers_id', 'id="inputFrom"'); ?>
           </div>
         </div>
         
         <div class="form-group row">
           <label for="inputNick" class="col-form-label col-sm-3 text-left text-sm-right"><?php echo ENTRY_FROM_NICKNAME; ?></label>
           <div class="col-sm-9">
-            <?php echo tep_draw_input_field('customer_name', '', 'required aria-required="true" id="inputNick" class="form-control"'); 
+            <?php echo tep_draw_input_field('customer_name', '', 'required aria-required="true" id="inputNick"'); 
             ?>
           </div>
         </div>
@@ -165,11 +179,16 @@
         <div class="form-group row">
           <label for="inputText" class="col-form-label col-sm-3 text-left text-sm-right"><?php echo ENTRY_TESTIMONIAL; ?></label>
           <div class="col-sm-9">
-            <?php echo tep_draw_textarea_field('testimonials_text', 'soft', '60', '15', '', 'required aria-required="true" id="inputText" class="form-control"'); ?>
+            <?php echo tep_draw_textarea_field('testimonials_text', 'soft', '60', '15', '', 'required aria-required="true" id="inputText" aria-describedby="TextHelp"'); ?>
+            <small id="TextHelp" class="form-text text-muted"><?php echo ENTRY_TESTIMONIAL_HTML_DISPLAYED; ?></small>
           </div>
         </div>
         
-        <p><?php echo tep_draw_bootstrap_button(IMAGE_SAVE, 'fas fa-pen', null, 'primary', null, 'btn-success btn-block btn-lg'); ?></p>
+        <?php
+        echo $OSCOM_Hooks->call('testimonials', 'formNew');
+        
+        echo tep_draw_bootstrap_button(IMAGE_SAVE, 'fas fa-pen', null, 'primary', null, 'btn-success btn-block btn-lg'); 
+        ?>
 
       </form>
        <?php
@@ -177,7 +196,7 @@
 ?>
       
   <div class="row no-gutters">
-    <div class="col">
+    <div class="col-12 col-sm-8">
       <div class="table-responsive">
         <table class="table table-striped table-hover">
           <thead class="thead-dark">
@@ -204,9 +223,9 @@
               }
 
               if (isset($tInfo) && is_object($tInfo) && ($testimonials['testimonials_id'] == $tInfo->testimonials_id) ) {
-                echo '<tr onclick="document.location.href=\'' . tep_href_link('testimonials.php', 'page=' . $_GET['page'] . '&tID=' . (int)$tInfo->testimonials_id . '&action=edit') . '\'">';
+                echo '<tr class="table-active" onclick="document.location.href=\'' . tep_href_link('testimonials.php', 'page=' . (int)$_GET['page'] . '&tID=' . (int)$tInfo->testimonials_id . '&action=edit') . '\'">';
               } else {
-                echo '<tr onclick="document.location.href=\'' . tep_href_link('testimonials.php', 'page=' . $_GET['page'] . '&tID=' . (int)$testimonials['testimonials_id']) . '\'">';
+                echo '<tr onclick="document.location.href=\'' . tep_href_link('testimonials.php', 'page=' . (int)$_GET['page'] . '&tID=' . (int)$testimonials['testimonials_id']) . '\'">';
               }
               ?>
                 <td><?php echo (int)$testimonials['customers_id']; ?></td>
@@ -214,12 +233,12 @@
                 <td><?php echo tep_date_short($testimonials['date_added']); ?></td>
                 <td class="text-center"><?php
                 if ($testimonials['testimonials_status'] == '1') {
-                  echo '<i class="fas fa-check-circle text-success"></i> <a href="' . tep_href_link('testimonials.php', 'action=setflag&flag=0&tID=' . $testimonials['testimonials_id'] . '&page=' . $_GET['page']) . '"><i class="fas fa-times-circle text-muted"></i></a>';
+                  echo '<i class="fas fa-check-circle text-success"></i> <a href="' . tep_href_link('testimonials.php', 'action=setflag&flag=0&tID=' . $testimonials['testimonials_id'] . '&page=' . (int)$_GET['page']) . '"><i class="fas fa-times-circle text-muted"></i></a>';
                 } else {
-                  echo '<a href="' . tep_href_link('testimonials.php', 'action=setflag&flag=1&tID=' . $testimonials['testimonials_id'] . '&page=' . $_GET['page']) . '"><i class="fas fa-check-circle text-muted"></i></a>  <i class="fas fa-times-circle text-danger"></i>';
+                  echo '<a href="' . tep_href_link('testimonials.php', 'action=setflag&flag=1&tID=' . $testimonials['testimonials_id'] . '&page=' . (int)$_GET['page']) . '"><i class="fas fa-check-circle text-muted"></i></a>  <i class="fas fa-times-circle text-danger"></i>';
                 }
                 ?></td>
-                <td class="text-right"><?php if ( (is_object($tInfo)) && ($testimonials['testimonials_id'] == $tInfo->testimonials_id) ) { echo '<i class="fas fa-chevron-circle-right text-info"></i>'; } else { echo '<a href="' . tep_href_link('testimonials.php', 'page=' . $_GET['page'] . '&tID=' . $testimonials['testimonials_id']) . '"><i class="fas fa-info-circle text-muted"></i></a>'; } ?></td>
+                <td class="text-right"><?php if ( (is_object($tInfo)) && ($testimonials['testimonials_id'] == $tInfo->testimonials_id) ) { echo '<i class="fas fa-chevron-circle-right text-info"></i>'; } else { echo '<a href="' . tep_href_link('testimonials.php', 'page=' . (int)$_GET['page'] . '&tID=' . $testimonials['testimonials_id']) . '"><i class="fas fa-info-circle text-muted"></i></a>'; } ?></td>
               </tr>
 <?php
     }
@@ -236,32 +255,32 @@
     </div>
 
 <?php
-    $heading = array();
-    $contents = array();
+    $heading = [];
+    $contents = [];
 
     switch ($action) {
       case 'delete':
-        $heading[] = array('text' => TEXT_INFO_HEADING_DELETE_TESTIMONIAL);
+        $heading[] = ['text' => TEXT_INFO_HEADING_DELETE_TESTIMONIAL];
 
-        $contents = array('form' => tep_draw_form('testimonials', 'testimonials.php', 'page=' . $_GET['page'] . '&tID=' . $tInfo->testimonials_id . '&action=deleteconfirm'));
-        $contents[] = array('text' => TEXT_INFO_DELETE_TESTIMONIAL_INTRO);
-        $contents[] = array('class' => 'text-center', 'text' => tep_draw_button(IMAGE_DELETE, 'trash', null, 'primary') . tep_draw_button(IMAGE_CANCEL, 'close', tep_href_link('testimonials.php', 'page=' . $_GET['page'] . '&tID=' . $tInfo->testimonials_id)));
+        $contents = ['form' => tep_draw_form('testimonials', 'testimonials.php', 'page=' . (int)$_GET['page'] . '&tID=' . $tInfo->testimonials_id . '&action=deleteconfirm')];
+        $contents[] = ['text' => TEXT_INFO_DELETE_TESTIMONIAL_INTRO];
+        $contents[] = ['class' => 'text-center', 'text' => tep_draw_bootstrap_button(IMAGE_DELETE, 'fas fa-trash', null, 'primary', null, 'btn-danger mr-2') . tep_draw_bootstrap_button(IMAGE_CANCEL, 'fas fa-times', tep_href_link('testimonials.php', 'page=' . (int)$_GET['page'] . '&tID=' . $tInfo->testimonials_id), null, null, 'btn-light')];
         break;
       default:
       if (isset($tInfo) && is_object($tInfo)) {
-        $heading[] = array('text' => $tInfo->customers_name);
+        $heading[] = ['text' => $tInfo->customers_name];
 
-        $contents[] = array('class' => 'text-center', 'text' => tep_draw_button(IMAGE_EDIT, 'document', tep_href_link('testimonials.php', 'page=' . $_GET['page'] . '&tID=' . $tInfo->testimonials_id . '&action=edit')) . tep_draw_button(IMAGE_DELETE, 'trash', tep_href_link('testimonials.php', 'page=' . $_GET['page'] . '&tID=' . $tInfo->testimonials_id . '&action=delete')));
-        $contents[] = array('text' => sprintf(TEXT_INFO_DATE_ADDED, tep_date_short($tInfo->date_added)));
-        if (tep_not_null($tInfo->last_modified)) $contents[] = array('text' => sprintf(TEXT_INFO_LAST_MODIFIED, tep_date_short($tInfo->last_modified)));
-        $contents[] = array('text' => sprintf(TEXT_INFO_TESTIMONIAL_AUTHOR, $tInfo->customers_name));
-        $contents[] = array('text' => sprintf(TEXT_INFO_TESTIMONIAL_SIZE, str_word_count($tInfo->testimonials_text)));
+        $contents[] = ['class' => 'text-center', 'text' => tep_draw_bootstrap_button(IMAGE_EDIT, 'fas fa-cogs', tep_href_link('testimonials.php', 'page=' . (int)$_GET['page'] . '&tID=' . $tInfo->testimonials_id . '&action=edit'), null, null, 'btn-warning mr-2') . tep_draw_bootstrap_button(IMAGE_DELETE, 'fas fa-trash', tep_href_link('testimonials.php', 'page=' . (int)$_GET['page'] . '&tID=' . $tInfo->testimonials_id . '&action=delete'), null, null, 'btn-danger')];
+        $contents[] = ['text' => sprintf(TEXT_INFO_DATE_ADDED, tep_date_short($tInfo->date_added))];
+        if (tep_not_null($tInfo->last_modified)) $contents[] = ['text' => sprintf(TEXT_INFO_LAST_MODIFIED, tep_date_short($tInfo->last_modified))];
+        $contents[] = ['text' => sprintf(TEXT_INFO_TESTIMONIAL_AUTHOR, $tInfo->customers_name)];
+        $contents[] = ['text' => sprintf(TEXT_INFO_TESTIMONIAL_SIZE, str_word_count($tInfo->testimonials_text))];
       }
         break;
     }
 
     if ( (tep_not_null($heading)) && (tep_not_null($contents)) ) {
-      echo '<div class="col-12 col-sm-3">';
+      echo '<div class="col-12 col-sm-4">';
         $box = new box;
         echo $box->infoBox($heading, $contents);
       echo '</div>';

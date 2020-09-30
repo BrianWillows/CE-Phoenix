@@ -10,7 +10,7 @@
   Released under the GNU General Public License
 */
 
-  require('includes/application_top.php');
+  require 'includes/application_top.php';
 
   $check_query = tep_db_query("select configuration_value from configuration where configuration_key = 'MODULE_CONTENT_INSTALLED' limit 1");
   if (tep_db_num_rows($check_query) < 1) {
@@ -18,40 +18,34 @@
     define('MODULE_CONTENT_INSTALLED', '');
   }
 
-  $modules_installed = (tep_not_null(MODULE_CONTENT_INSTALLED) ? explode(';', MODULE_CONTENT_INSTALLED) : array());
-  $modules = array('installed' => array(), 'new' => array());
+  $modules_installed = (tep_not_null(MODULE_CONTENT_INSTALLED) ? explode(';', MODULE_CONTENT_INSTALLED) : []);
+  $modules = ['installed' => [], 'new' => []];
 
-  $file_extension = substr($PHP_SELF, strrpos($PHP_SELF, '.'));
-
-  if ($maindir = @dir(DIR_FS_CATALOG_MODULES . 'content/')) {
+  if ($maindir = @dir(DIR_FS_CATALOG . 'includes/modules/content/')) {
     while ($group = $maindir->read()) {
-      if ( ($group != '.') && ($group != '..') && is_dir(DIR_FS_CATALOG_MODULES . 'content/' . $group)) {
-        if ($dir = @dir(DIR_FS_CATALOG_MODULES . 'content/' . $group)) {
+      if ( ($group != '.') && ($group != '..') && is_dir(DIR_FS_CATALOG . 'includes/modules/content/' . $group)) {
+        if ($dir = @dir(DIR_FS_CATALOG . 'includes/modules/content/' . $group)) {
           while ($file = $dir->read()) {
-            if (!is_dir(DIR_FS_CATALOG_MODULES . 'content/' . $group . '/' . $file)) {
-              if (substr($file, strrpos($file, '.')) == $file_extension) {
-                $class = substr($file, 0, strrpos($file, '.'));
-
-                if (!class_exists($class)) {
-                  if ( file_exists(DIR_FS_CATALOG_LANGUAGES . $language . '/modules/content/' . $group . '/' . $file) ) {
-                    include(DIR_FS_CATALOG_LANGUAGES . $language . '/modules/content/' . $group . '/' . $file);
-                  }
-
-                  include(DIR_FS_CATALOG_MODULES . 'content/' . $group . '/' . $file);
-                }
+            if (!is_dir(DIR_FS_CATALOG . 'includes/modules/content/' . $group . '/' . $file)) {
+              if ('php' === pathinfo($file, PATHINFO_EXTENSION)) {
+                $class = pathinfo($file, PATHINFO_FILENAME);
 
                 if (class_exists($class)) {
                   $module = new $class();
 
                   if (in_array($group . '/' . $class, $modules_installed)) {
-                    $modules['installed'][] = array('code' => $class,
-                                                    'title' => $module->title,
-                                                    'group' => $group,
-                                                    'sort_order' => (int)$module->sort_order);
+                    $modules['installed'][] = [
+                      'code' => $class,
+                      'title' => $module->title,
+                      'group' => $group,
+                      'sort_order' => (int)$module->sort_order,
+                    ];
                   } else {
-                    $modules['new'][] = array('code' => $class,
-                                              'title' => $module->title,
-                                              'group' => $group);
+                    $modules['new'][] = [
+                      'code' => $class,
+                      'title' => $module->title,
+                      'group' => $group,
+                    ];
                   }
                 }
               }
@@ -78,7 +72,7 @@
   }
 
 // Update sort order in MODULE_CONTENT_INSTALLED
-  $_installed = array();
+  $_installed = [];
 
   foreach ( $modules['installed'] as $m ) {
     $_installed[] = $m['group'] . '/' . $m['code'];
@@ -89,6 +83,8 @@
   }
 
   $action = $_GET['action'] ?? '';
+
+  $OSCOM_Hooks->call('modules_content', 'preAction');
 
   if (tep_not_null($action)) {
     switch ($action) {
@@ -107,6 +103,8 @@
             break;
           }
         }
+
+        $OSCOM_Hooks->call('modules_content', 'saveAction');
 
         tep_redirect(tep_href_link('modules_content.php', 'module=' . $class));
 
@@ -128,6 +126,8 @@
             tep_redirect(tep_href_link('modules_content.php', 'module=' . $class . '&action=edit'));
           }
         }
+
+        $OSCOM_Hooks->call('modules_content', 'installAction');
 
         tep_redirect(tep_href_link('modules_content.php', 'action=list_new&module=' . $class));
 
@@ -154,13 +154,17 @@
           }
         }
 
+        $OSCOM_Hooks->call('modules_content', 'removeAction');
+
         tep_redirect(tep_href_link('modules_content.php', 'module=' . $class));
 
         break;
     }
   }
 
-  require('includes/template_top.php');
+  $OSCOM_Hooks->call('modules_content', 'postAction');
+
+  require 'includes/template_top.php';
 ?>
 
   <div class="row">
@@ -172,15 +176,15 @@
       if (isset($_GET['action']) && ($_GET['action'] == 'list_new')) {
         echo tep_draw_bootstrap_button(IMAGE_BACK, 'fas fa-angle-left', tep_href_link('modules_content.php'), null, null, 'btn-light');
       } else {
-        echo tep_draw_bootstrap_button(IMAGE_MODULE_INSTALL . ' (' . count($modules['new']) . ')', 'fas fa-cogs', tep_href_link('modules_content.php', 'action=list_new'), null, null, 'btn-danger xxx text-white');
+        echo tep_draw_bootstrap_button(IMAGE_MODULE_INSTALL . ' (' . count($modules['new']) . ')', 'fas fa-plus', tep_href_link('modules_content.php', 'action=list_new'), null, null, 'btn-danger');
       }
       ?>
     </div>
   </div>
-  
+
   <div class="row no-gutters">
-    <div class="col">
-    
+    <div class="col-12 col-sm-8">
+
 <?php
   if ( $action == 'list_new' ) {
 ?>
@@ -199,23 +203,23 @@
               $module = new $m['code']();
 
               if ((!isset($_GET['module']) || (isset($_GET['module']) && ($_GET['module'] == $module->code))) && !isset($mInfo)) {
-                $module_info = array('code' => $module->code,
-                                     'title' => $module->title,
-                                     'description' => $module->description,
-                                     'signature' => (isset($module->signature) ? $module->signature : null),
-                                     'api_version' => (isset($module->api_version) ? $module->api_version : null));
+                $module_info = ['code' => $module->code,
+                                'title' => $module->title,
+                                'description' => $module->description,
+                                'signature' => (isset($module->signature) ? $module->signature : null),
+                                'api_version' => (isset($module->api_version) ? $module->api_version : null)];
 
                 $mInfo = new objectInfo($module_info);
               }
 
               if (isset($mInfo) && is_object($mInfo) && ($module->code == $mInfo->code) ) {
-                echo '<tr>';
+                echo '<tr class="table-active">';
               } else {
                 echo '<tr onclick="document.location.href=\'' . tep_href_link('modules_content.php', 'action=list_new&module=' . $module->code) . '\'">';
               }
               ?>
                 <td><?php echo $module->title; ?></td>
-                <td><?php echo $module->group; ?></td>
+                <td><?php if (is_callable([$module, 'get_group'])) { echo $module->get_group(); } elseif (isset($module->group)) { echo $module->group; } ?></td>
                 <td class="text-right"><?php if (isset($mInfo) && is_object($mInfo) && ($module->code == $mInfo->code) ) { echo '<i class="fas fa-chevron-circle-right text-info"></i>'; } else { echo '<a href="' . tep_href_link('modules_content.php', 'action=list_new&module=' . $module->code) . '"><i class="fas fa-info-circle text-muted"></i></a>'; } ?></td>
               </tr>
               <?php
@@ -228,7 +232,7 @@
 <?php
   } else {
 ?>
-    
+
       <div class="table-responsive">
         <table class="table table-striped table-hover">
           <thead class="thead-dark">
@@ -245,14 +249,16 @@
             foreach ( $modules['installed'] as $m ) {
               $module = new $m['code']();
 
-              if ((!isset($_GET['module']) || (isset($_GET['module']) && ($_GET['module'] == $module->code))) && !isset($mInfo)) {
-                $module_info = array('code' => $module->code,
-                                     'title' => $module->title,
-                                     'description' => $module->description,
-                                     'signature' => (isset($module->signature) ? $module->signature : null),
-                                     'api_version' => (isset($module->api_version) ? $module->api_version : null),
-                                     'sort_order' => (int)$module->sort_order,
-                                     'keys' => array());
+              if (!isset($mInfo) && (!isset($_GET['module']) || ($_GET['module'] == $module->code))) {
+                $module_info = [
+                  'code' => $module->code,
+                  'title' => $module->title,
+                  'description' => $module->description,
+                  'signature' => ($module->signature ?? null),
+                  'api_version' => ($module->api_version ?? null),
+                  'sort_order' => (int)$module->sort_order,
+                  'keys' => [],
+                ];
 
                 foreach ($module->keys() as $key) {
                   $key = tep_db_prepare_input($key);
@@ -260,29 +266,31 @@
                   $key_value_query = tep_db_query("select configuration_title, configuration_value, configuration_description, use_function, set_function from configuration where configuration_key = '" . tep_db_input($key) . "'");
                   $key_value = tep_db_fetch_array($key_value_query);
 
-                  $module_info['keys'][$key] = array('title' => $key_value['configuration_title'],
-                                                     'value' => $key_value['configuration_value'],
-                                                     'description' => $key_value['configuration_description'],
-                                                     'use_function' => $key_value['use_function'],
-                                                     'set_function' => $key_value['set_function']);
+                  $module_info['keys'][$key] = [
+                    'title' => $key_value['configuration_title'],
+                    'value' => $key_value['configuration_value'],
+                    'description' => $key_value['configuration_description'],
+                    'use_function' => $key_value['use_function'],
+                    'set_function' => $key_value['set_function'],
+                  ];
                 }
 
                 $mInfo = new objectInfo($module_info);
               }
 
               if (isset($mInfo) && is_object($mInfo) && ($module->code == $mInfo->code) ) {
-                echo '<tr>';
+                echo '<tr class="table-active">';
               } else {
                 echo '<tr onclick="document.location.href=\'' . tep_href_link('modules_content.php', 'module=' . $module->code) . '\'">';
               }
               ?>
                 <td><?php echo $module->title; ?></td>
-                <td><?php echo $module->group; ?></td>
+                <td><?php if (is_callable([$module, 'get_group'])) { echo $module->get_group(); } elseif (isset($module->group)) { echo $module->group; } ?></td>
                 <td class="text-right"><?php echo $module->sort_order; ?></td>
                 <td class="text-right">
                   <?php echo ($module->enabled == 1) ? '<i class="fas fa-check-circle text-success"></i>' : '<i class="fas fa-times-circle text-danger"></i>'; ?>
                 </td>
-                <td class="dataTableContent" align="right"><?php if (isset($mInfo) && is_object($mInfo) && ($module->code == $mInfo->code) ) { echo '<i class="fas fa-chevron-circle-right text-info"></i>'; } else { echo '<a href="' . tep_href_link('modules_content.php', 'module=' . $module->code) . '"><i class="fas fa-info-circle text-muted"></i></a>'; } ?></td>
+                <td class="text-right"><?php if (isset($mInfo) && is_object($mInfo) && ($module->code == $mInfo->code) ) { echo '<i class="fas fa-chevron-circle-right text-info"></i>'; } else { echo '<a href="' . tep_href_link('modules_content.php', 'module=' . $module->code) . '"><i class="fas fa-info-circle text-muted"></i></a>'; } ?></td>
               </tr>
               <?php
               }
@@ -293,20 +301,20 @@
 <?php
   }
 ?>
-      <p class="smallText"><?php echo TEXT_MODULE_DIRECTORY . ' ' . DIR_FS_CATALOG_MODULES . 'content/'; ?></p>
-      
+      <p class="smallText"><?php echo TEXT_MODULE_DIRECTORY . ' ' . DIR_FS_CATALOG . 'includes/modules/content/'; ?></p>
+
     </div>
 
 <?php
-  $heading = array();
-  $contents = array();
+  $heading = [];
+  $contents = [];
 
   switch ($action) {
     case 'edit':
       $keys = '';
 
       foreach ($mInfo->keys as $key => $value) {
-        $keys .= '<strong>' . $value['title'] . '</strong><br />' . $value['description'] . '<br />';
+        $keys .= '<strong>' . $value['title'] . '</strong><br>' . $value['description'] . '<br>';
 
         if ($value['set_function']) {
           eval('$keys .= ' . $value['set_function'] . "'" . tep_db_input($value['value']) . "', '" . $key . "');");
@@ -314,40 +322,40 @@
           $keys .= tep_draw_input_field('configuration[' . $key . ']', $value['value']);
         }
 
-        $keys .= '<br /><br />';
+        $keys .= '<br><br>';
       }
 
-      $keys = html_entity_decode(stripslashes(substr($keys, 0, strrpos($keys, '<br /><br />'))));
+      $keys = html_entity_decode(stripslashes(substr($keys, 0, strrpos($keys, '<br><br>'))));
 
-      $heading[] = array('text' => $mInfo->title);
+      $heading[] = ['text' => $mInfo->title];
 
-      $contents = array('form' => tep_draw_form('modules', 'modules_content.php', 'module=' . $mInfo->code . '&action=save'));
-      $contents[] = array('text' => $keys);
-      $contents[] = array('class' => 'text-center', 'text' => tep_draw_button(IMAGE_SAVE, 'disk', null, 'primary') . tep_draw_button(IMAGE_CANCEL, 'close', tep_href_link('modules_content.php', 'module=' . $mInfo->code)));
+      $contents = ['form' => tep_draw_form('modules', 'modules_content.php', 'module=' . $mInfo->code . '&action=save')];
+      $contents[] = ['text' => $keys];
+      $contents[] = ['class' => 'text-center', 'text' => tep_draw_bootstrap_button(IMAGE_SAVE, 'fas fa-save', null, 'primary', null, 'btn-success mr-2') . tep_draw_bootstrap_button(IMAGE_CANCEL, 'fas fa-times', tep_href_link('modules_content.php', 'module=' . $mInfo->code), null, null, 'btn-light')];
 
       break;
 
     default:
       if ( isset($mInfo) ) {
-        $heading[] = array('text' => $mInfo->title);
+        $heading[] = ['text' => $mInfo->title];
 
         if ($action == 'list_new') {
-          $contents[] = array('class' => 'text-center', 'text' => tep_draw_button(IMAGE_MODULE_INSTALL, 'plus', tep_href_link('modules_content.php', 'module=' . $mInfo->code . '&action=install')));
+          $contents[] = ['class' => 'text-center', 'text' => tep_draw_bootstrap_button(IMAGE_MODULE_INSTALL, 'fas fa-plus', tep_href_link('modules_content.php', 'module=' . $mInfo->code . '&action=install'), null, null, 'btn-warning')];
 
           if (isset($mInfo->signature) && (list($scode, $smodule, $sversion, $soscversion) = explode('|', $mInfo->signature))) {
-            $contents[] = array('text' => '<i class="fas fa-info-circle text-muted"></i> <strong>' . TEXT_INFO_VERSION . '</strong> ' . $sversion . ' (<a href="http://sig.oscommerce.com/' . $mInfo->signature . '" target="_blank">' . TEXT_INFO_ONLINE_STATUS . '</a>)');
+            $contents[] = ['text' => '<i class="fas fa-info-circle text-muted"></i> <strong>' . TEXT_INFO_VERSION . '</strong> ' . $sversion . ' (<a href="http://sig.oscommerce.com/' . $mInfo->signature . '" target="_blank">' . TEXT_INFO_ONLINE_STATUS . '</a>)'];
           }
 
           if (isset($mInfo->api_version)) {
-            $contents[] = array('text' => '<i class="fas fa-info-circle text-muted"></i> <strong>' . TEXT_INFO_API_VERSION . '</strong> ' . $mInfo->api_version);
+            $contents[] = ['text' => '<i class="fas fa-info-circle text-muted"></i> <strong>' . TEXT_INFO_API_VERSION . '</strong> ' . $mInfo->api_version];
           }
 
-          $contents[] = array('text' => $mInfo->description);
+          $contents[] = ['text' => $mInfo->description];
         } else {
           $keys = '';
 
           foreach ($mInfo->keys as $value) {
-            $keys .= '<strong>' . $value['title'] . '</strong><br />';
+            $keys .= '<strong>' . $value['title'] . '</strong><br>';
 
             if ($value['use_function']) {
               $use_function = $value['use_function'];
@@ -356,35 +364,33 @@
                 $class_method = explode('->', $use_function);
 
                 if (!isset(${$class_method[0]}) || !is_object(${$class_method[0]})) {
-                  include('includes/classes/' . $class_method[0] . '.php');
                   ${$class_method[0]} = new $class_method[0]();
                 }
 
-                $keys .= tep_call_function($class_method[1], $value['value'], ${$class_method[0]});
-              } else {
-                $keys .= tep_call_function($use_function, $value['value']);
+                $use_function = [${$class_method[0]}, $class_method[1]];
               }
+              $keys .= call_user_func($use_function, $value['value']);
             } else {
-              $keys .= $value['value'];
+              $keys .= tep_break_string($value['value'], 40, '<br>');
             }
 
-            $keys .= '<br /><br />';
+            $keys .= '<br><br>';
           }
 
-          $keys = html_entity_decode(stripslashes(substr($keys, 0, strrpos($keys, '<br /><br />'))));
+          $keys = html_entity_decode(stripslashes(substr($keys, 0, strrpos($keys, '<br><br>'))));
 
-          $contents[] = array('class' => 'text-center', 'text' => tep_draw_button(IMAGE_EDIT, 'document', tep_href_link('modules_content.php', 'module=' . $mInfo->code . '&action=edit')) . tep_draw_button(IMAGE_MODULE_REMOVE, 'minus', tep_href_link('modules_content.php', 'module=' . $mInfo->code . '&action=remove')));
+          $contents[] = ['class' => 'text-center', 'text' => tep_draw_bootstrap_button(IMAGE_EDIT, 'fas fa-plus', tep_href_link('modules_content.php', 'module=' . $mInfo->code . '&action=edit'), null, null, 'btn-warning mr-2') . tep_draw_bootstrap_button(IMAGE_MODULE_REMOVE, 'fas fa-minus', tep_href_link('modules_content.php', 'module=' . $mInfo->code . '&action=remove'), null, null, 'btn-warning')];
 
           if (isset($mInfo->signature) && (list($scode, $smodule, $sversion, $soscversion) = explode('|', $mInfo->signature))) {
-            $contents[] = array('text' => '<i class="fas fa-info-circle text-muted"></i> <strong>' . TEXT_INFO_VERSION . '</strong> ' . $sversion . ' (<a href="http://sig.oscommerce.com/' . $mInfo->signature . '" target="_blank">' . TEXT_INFO_ONLINE_STATUS . '</a>)');
+            $contents[] = ['text' => '<i class="fas fa-info-circle text-muted"></i> <strong>' . TEXT_INFO_VERSION . '</strong> ' . $sversion . ' (<a href="http://sig.oscommerce.com/' . $mInfo->signature . '" target="_blank">' . TEXT_INFO_ONLINE_STATUS . '</a>)'];
           }
 
           if (isset($mInfo->api_version)) {
-            $contents[] = array('text' => '<i class="fas fa-info-circle text-muted"></i> <strong>' . TEXT_INFO_API_VERSION . '</strong> ' . $mInfo->api_version);
+            $contents[] = ['text' => '<i class="fas fa-info-circle text-muted"></i> <strong>' . TEXT_INFO_API_VERSION . '</strong> ' . $mInfo->api_version];
           }
 
-          $contents[] = array('text' => $mInfo->description);
-          $contents[] = array('text' => $keys);
+          $contents[] = ['text' => $mInfo->description];
+          $contents[] = ['text' => $keys];
         }
       }
 
@@ -392,16 +398,16 @@
   }
 
   if ( (tep_not_null($heading)) && (tep_not_null($contents)) ) {
-    echo '<div class="col-12 col-sm-3">';
+    echo '<div class="col-12 col-sm-4">';
       $box = new box;
       echo $box->infoBox($heading, $contents);
     echo '</div>';
   }
 ?>
-          
+
   </div>
 
 <?php
-  require('includes/template_bottom.php');
-  require('includes/application_bottom.php');
+  require 'includes/template_bottom.php';
+  require 'includes/application_bottom.php';
 ?>

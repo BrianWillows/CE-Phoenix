@@ -13,6 +13,8 @@
   require('includes/application_top.php');
 
   $action = $_GET['action'] ?? '';
+  
+  $OSCOM_Hooks->call('configuration', 'preAction');
 
   if (tep_not_null($action)) {
     switch ($action) {
@@ -22,10 +24,14 @@
 
         tep_db_query("update configuration set configuration_value = '" . tep_db_input($configuration_value) . "', last_modified = now() where configuration_id = '" . (int)$cID . "'");
 
+        $OSCOM_Hooks->call('configuration', 'saveAction');
+        
         tep_redirect(tep_href_link('configuration.php', 'gID=' . $_GET['gID'] . '&cID=' . $cID));
         break;
     }
   }
+  
+  $OSCOM_Hooks->call('configuration', 'postAction');
 
   $gID = (isset($_GET['gID'])) ? $_GET['gID'] : 1;
 
@@ -38,7 +44,7 @@
   <h1 class="display-4 mb-2"><?php echo $cfg_group['configuration_group_title']; ?></h1>
   
   <div class="row no-gutters">
-    <div class="col">
+    <div class="col-12 col-sm-8">
       <div class="table-responsive">
         <table class="table table-striped table-hover">
           <thead class="thead-dark">
@@ -80,7 +86,7 @@
               }
 
               if ( (isset($cInfo) && is_object($cInfo)) && ($configuration['configuration_id'] == $cInfo->configuration_id) ) {
-                echo '<tr onclick="document.location.href=\'' . tep_href_link('configuration.php', 'gID=' . (int)$_GET['gID'] . '&cID=' . (int)$cInfo->configuration_id . '&action=edit') . '\'">' . "\n";
+                echo '<tr class="table-active" onclick="document.location.href=\'' . tep_href_link('configuration.php', 'gID=' . (int)$_GET['gID'] . '&cID=' . (int)$cInfo->configuration_id . '&action=edit') . '\'">' . "\n";
               } else {
                 echo '<tr onclick="document.location.href=\'' . tep_href_link('configuration.php', 'gID=' . (int)$_GET['gID'] . '&cID=' . (int)$configuration['configuration_id']) . '\'">' . "\n";
               }
@@ -96,12 +102,12 @@
           </div>
         </div>
 <?php
-  $heading = array();
-  $contents = array();
+  $heading = [];
+  $contents = [];
 
   switch ($action) {
     case 'edit':
-      $heading[] = array('text' => $cInfo->configuration_title);
+      $heading[] = ['text' => $cInfo->configuration_title];
 
       if ($cInfo->set_function) {
         eval('$value_field = ' . $cInfo->set_function . '"' . htmlspecialchars($cInfo->configuration_value) . '");');
@@ -109,25 +115,25 @@
         $value_field = tep_draw_input_field('configuration_value', $cInfo->configuration_value);
       }
 
-      $contents = array('form' => tep_draw_form('configuration', 'configuration.php', 'gID=' . $_GET['gID'] . '&cID=' . $cInfo->configuration_id . '&action=save'));
-      $contents[] = array('text' => TEXT_INFO_EDIT_INTRO);
-      $contents[] = array('text' => '<strong>' . $cInfo->configuration_title . '</strong><br />' . $cInfo->configuration_description . '<br />' . $value_field);
-      $contents[] = array('class' => 'text-center', 'text' => tep_draw_button(IMAGE_SAVE, 'disk', null, 'primary') . tep_draw_button(IMAGE_CANCEL, 'close', tep_href_link('configuration.php', 'gID=' . (int)$_GET['gID'] . '&cID=' . (int)$cInfo->configuration_id)));
+      $contents = ['form' => tep_draw_form('configuration', 'configuration.php', 'gID=' . $_GET['gID'] . '&cID=' . $cInfo->configuration_id . '&action=save')];
+      $contents[] = ['text' => TEXT_INFO_EDIT_INTRO];
+      $contents[] = ['text' => '<strong>' . $cInfo->configuration_title . '</strong><br>' . $cInfo->configuration_description . '<br>' . $value_field];
+      $contents[] = ['class' => 'text-center', 'text' => tep_draw_bootstrap_button(IMAGE_SAVE, 'fas fa-save', null, 'primary', null, 'btn-success mr-2') . tep_draw_bootstrap_button(IMAGE_CANCEL, 'fas fa-times', tep_href_link('configuration.php', 'gID=' . (int)$_GET['gID'] . '&cID=' . (int)$cInfo->configuration_id), null, null, 'btn-light')];
       break;
     default:
       if (isset($cInfo) && is_object($cInfo)) {
-        $heading[] = array('text' => $cInfo->configuration_title);
+        $heading[] = ['text' => $cInfo->configuration_title];
 
-        $contents[] = array('class' => 'text-center', 'text' => tep_draw_button(IMAGE_EDIT, 'document', tep_href_link('configuration.php', 'gID=' . (int)$_GET['gID'] . '&cID=' . (int)$cInfo->configuration_id . '&action=edit')));
-        $contents[] = array('text' => $cInfo->configuration_description);
-        $contents[] = array('text' => TEXT_INFO_DATE_ADDED . ' ' . tep_date_short($cInfo->date_added));
-        if (tep_not_null($cInfo->last_modified)) $contents[] = array('text' => TEXT_INFO_LAST_MODIFIED . ' ' . tep_date_short($cInfo->last_modified));
+        $contents[] = ['class' => 'text-center', 'text' => tep_draw_bootstrap_button(IMAGE_EDIT, 'fas fa-cogs', tep_href_link('configuration.php', 'gID=' . (int)$_GET['gID'] . '&cID=' . (int)$cInfo->configuration_id . '&action=edit'), null, null, 'btn-warning mr-2')];
+        $contents[] = ['text' => $cInfo->configuration_description];
+        $contents[] = ['text' => TEXT_INFO_DATE_ADDED . ' ' . tep_date_short($cInfo->date_added)];
+        if (tep_not_null($cInfo->last_modified)) $contents[] = ['text' => TEXT_INFO_LAST_MODIFIED . ' ' . tep_date_short($cInfo->last_modified)];
       }
       break;
   }
 
   if ( (tep_not_null($heading)) && (tep_not_null($contents)) ) {
-    echo '<div class="col-12 col-sm-3">';
+    echo '<div class="col-12 col-sm-4">';
       $box = new box;
       echo $box->infoBox($heading, $contents);
     echo '</div>';
